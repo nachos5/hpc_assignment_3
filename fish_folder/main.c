@@ -45,29 +45,6 @@ void generateType(int *rank, int *outbuf, int *harbor_coords)
   harbor_coords[1] = harbor_y;
 }
 
-void initObjects(int *coords, int *rank, int *is_harbor)
-{
-  // two random cells who are not the harbour generate fish groups
-  // first we need to generate two random numbers representing the rank
-  int rand_1 = rand() % SIZE;
-  int rand_2 = rand() % SIZE;
-  // if the fish group lands on the harbor we have to try again
-  while (*is_harbor == 1 && rand_1 == *rank)
-  {
-    rand_1 = rand() % SIZE;
-  }
-  while (*is_harbor == 1 && rand_2 == *rank)
-  {
-    rand_2 = rand() % SIZE;
-  }
-  // two fish groups
-  if (rand_1 == *rank || rand_2 == *rank)
-  {
-    Fish fish = fish_constructor(10, -1, coords);
-    printf("FISH %d,%d \n", fish.x, fish.y);
-  }
-}
-
 // function to visualize the grid, the root process gathers the type of all cells (processes)
 // and then prints the content in the right order
 void visualizeGrid(int rank, int outbuf)
@@ -90,22 +67,11 @@ void visualizeGrid(int rank, int outbuf)
         printf("\n");
       }
     }
+    printf("\n");
   }
   else
   {
     MPI_Gather(&outbuf, 1, MPI_INT, NULL, 0, MPI_INT, 0, MPI_COMM_WORLD);
-  }
-}
-
-void iteration(MPI_Comm *cartcomm, int *has_fish)
-{
-  // if this cell has fish we check our neighbours for a new location for the fish to swim to
-  if (*has_fish == 1)
-  {
-    int nbrs[4];
-    // shifting to gain information about our neighbours
-    MPI_Cart_shift(*cartcomm, 0, 1, &nbrs[UP], &nbrs[DOWN]);
-    MPI_Cart_shift(*cartcomm, 1, 1, &nbrs[LEFT], &nbrs[RIGHT]);
   }
 }
 
@@ -119,6 +85,7 @@ int main(int argc, char **argv)
 
   int harbor_coords[2];
   int is_harbor = 0;
+  int fish_rank_1, fish_rank_2;
   int has_fish;
 
   MPI_Comm cartcomm;
@@ -147,11 +114,53 @@ int main(int argc, char **argv)
     printf("Harbor coordinates: %d,%d \n", harbor_coords[0], harbor_coords[1]);
   }
 
-  initObjects(coords, &rank, &is_harbor);
+  // initObjects(coords, &rank, &is_harbor);
+
+  // ************************** //
+  // ***** initialization ***** //
+  // ************************** //
+
+  // two random cells who are not the harbour generate fish groups
+  // first we need to generate two random numbers representing the rank
+  fish_rank_1 = rand() % SIZE;
+  fish_rank_2 = rand() % SIZE;
+  // if the fish group lands on the harbor we have to try again
+  while (is_harbor == 1 && fish_rank_1 == rank)
+  {
+    fish_rank_1 = rand() % SIZE;
+  }
+  while (is_harbor == 1 && fish_rank_2 == rank && fish_rank_1 == fish_rank_2)
+  {
+    fish_rank_2 = rand() % SIZE;
+  }
+
+  // ************************ //
+  // ****** ITERATIONS ****** //
+  // ************************ //
+
+  // lets visualize the grid
+  visualizeGrid(rank, outbuf);
+
+  // two fish groups
+  if (fish_rank_1 == rank || fish_rank_2 == rank)
+  {
+    Fish fish = fish_constructor(10, -1, coords);
+    printf("FISH %d,%d \n", fish.x, fish.y);
+
+    // shifting to gain information about our neighbours
+    int nbrs[4];
+    MPI_Cart_shift(cartcomm, 0, 1, &nbrs[UP], &nbrs[DOWN]);
+    MPI_Cart_shift(cartcomm, 1, 1, &nbrs[LEFT], &nbrs[RIGHT]);
+    printf("Neighbours %d, %d, %d, %d \n", nbrs[UP], nbrs[DOWN], nbrs[LEFT], nbrs[RIGHT]);
+
+    // let's choose a random neighbour (direction) for the fish group to swim to
+    int rand_neighbour = nbrs[rand() % 4];
+    // swim!
+  }
 
   // does this cell have a fish group?
-  //has_fish = (fish.x == coords[0]) && (fish.y == coords[1]);
-  //printf("has fish: %d \n", has_fish);
+  // has_fish = (fish.x == coords[0]) && (fish.y == coords[1]);
+  // printf("has fish: %d \n", has_fish);
 
   // printf("%d", fish->x);
 
