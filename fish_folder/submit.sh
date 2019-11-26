@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J cart2d-example
+#SBATCH -J oceanman
 #SBATCH -n 16
 #SBATCH --mail-user=gon2@hi.is
 #SBATCH --mail-type=end

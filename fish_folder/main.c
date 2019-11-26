@@ -1,82 +1,10 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
-#include <mpi.h>
 
-// our imports
+#include "./utils.c"
 #include "./fish.c"
-
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
-#define WATER 0
-#define LAND 1
-
-// grid size definitions
-#define SIZE 16
-#define ROWS 4
-#define COLS 4
-
-// in this case we only need one landcell (the harbor), the rest is water
-void generateType(int *rank, int *outbuf, int *harbor_coords)
-{
-  // same seed to make sure we get the same result for all processes
-  srand(time(NULL));
-  int harbor_x = rand() % COLS; // 0 - (COLS-1)
-  int harbor_y = rand() % ROWS; // 0 - (ROWS-1)
-  int harbor_index = (harbor_x * COLS) + harbor_y;
-  // the harbor
-  if (*rank == harbor_index)
-  {
-    *outbuf = 1;
-    // printf("%d,%d \n", harbor_x, harbor_y);
-    // printf("%d", harbor_index);
-    // water
-  }
-  else
-  {
-    *outbuf = 0;
-  }
-
-  // let's store the havbor coordinates for all processes
-  harbor_coords[0] = harbor_x;
-  harbor_coords[1] = harbor_y;
-}
-
-// function to visualize the grid, the root process gathers the type of all cells (processes)
-// and then prints the content in the right order
-void visualizeGrid(int rank, int outbuf)
-{
-  sleep(1);
-  MPI_Barrier(MPI_COMM_WORLD);
-  // only the root process gathers the data and prints it
-  if (rank == 0)
-  {
-    int recv_buff[SIZE];
-    MPI_Gather(&outbuf, 1, MPI_INT, recv_buff, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    printf("\nGrid:\n");
-    for (int i = 0; i < SIZE; i++)
-    {
-      // print the type of this cell
-      printf("%d ", recv_buff[i]);
-      // we check if we have to go to the next row
-      if ((i + 1) % COLS == 0)
-      {
-        printf("\n");
-      }
-    }
-    printf("\n");
-  }
-  else
-  {
-    MPI_Gather(&outbuf, 1, MPI_INT, NULL, 0, MPI_INT, 0, MPI_COMM_WORLD);
-  }
-}
 
 int main(int argc, char **argv)
 {
+  // variables common to all processes
   int numtasks, rank, source, dest, outbuf, i, j, tag = 1;
   int inbuf[4] = {MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL,
                   MPI_PROC_NULL};
@@ -85,13 +13,16 @@ int main(int argc, char **argv)
 
   int harbor_coords[2];
   int is_harbor = 0;
-  int fish_rank_1, fish_rank_2;
+  int fish_ranks[2];
+  int prev_fish_ranks[2];
   int has_fish;
 
   MPI_Comm cartcomm;
 
   MPI_Request reqs[8];
   MPI_Status stats[8];
+  MPI_Request fish_req[1];
+  MPI_Status fish_stat[1];
 
   // starting with MPI program
   MPI_Init(&argc, &argv);
@@ -114,78 +45,80 @@ int main(int argc, char **argv)
     printf("Harbor coordinates: %d,%d \n", harbor_coords[0], harbor_coords[1]);
   }
 
-  // initObjects(coords, &rank, &is_harbor);
-
   // ************************** //
-  // ***** initialization ***** //
+  // ** ocean initialization ** //
   // ************************** //
 
   // two random cells who are not the harbour generate fish groups
   // first we need to generate two random numbers representing the rank
-  fish_rank_1 = rand() % SIZE;
-  fish_rank_2 = rand() % SIZE;
+  fish_ranks[0] = rand() % SIZE;
+  fish_ranks[1] = rand() % SIZE;
   // if the fish group lands on the harbor we have to try again
-  while (is_harbor == 1 && fish_rank_1 == rank)
+  while (is_harbor == 1 && fish_ranks[0] == rank)
   {
-    fish_rank_1 = rand() % SIZE;
+    fish_ranks[0] = rand() % SIZE;
   }
-  while (is_harbor == 1 && fish_rank_2 == rank && fish_rank_1 == fish_rank_2)
+  while (is_harbor == 1 && fish_ranks[1] == rank && fish_ranks[0] == fish_ranks[1])
   {
-    fish_rank_2 = rand() % SIZE;
+    fish_ranks[1] = rand() % SIZE;
   }
 
   // ************************ //
   // ****** ITERATIONS ****** //
   // ************************ //
 
-  // lets visualize the grid
-  visualizeGrid(rank, outbuf);
+  // fish iteration
 
-  // two fish groups
-  if (fish_rank_1 == rank || fish_rank_2 == rank)
+  for (int ii = 0; ii < 10; ii++)
   {
-    Fish fish = fish_constructor(10, -1, coords);
-    printf("FISH %d,%d \n", fish.x, fish.y);
+    prev_fish_ranks[0] = fish_ranks[0];
+    prev_fish_ranks[1] = fish_ranks[1];
+    // two fish groups
+    if (fish_ranks[0] == rank || fish_ranks[1] == rank)
+    {
+      int index;
+      if (fish_ranks[0] == rank)
+        index = 1;
+      else
+        index = 2;
+      // fish structure
+      Fish fish = fish_constructor(index, 10, coords);
+      // shifting to gain information about our neighbours using the cart-communicator
+      int nbrs[4];
+      MPI_Cart_shift(cartcomm, 0, 1, &nbrs[UP], &nbrs[DOWN]);
+      MPI_Cart_shift(cartcomm, 1, 1, &nbrs[LEFT], &nbrs[RIGHT]);
+      // printf("Neighbours %d, %d, %d, %d \n", nbrs[UP], nbrs[DOWN], nbrs[LEFT], nbrs[RIGHT]);
 
-    // shifting to gain information about our neighbours
-    int nbrs[4];
-    MPI_Cart_shift(cartcomm, 0, 1, &nbrs[UP], &nbrs[DOWN]);
-    MPI_Cart_shift(cartcomm, 1, 1, &nbrs[LEFT], &nbrs[RIGHT]);
-    printf("Neighbours %d, %d, %d, %d \n", nbrs[UP], nbrs[DOWN], nbrs[LEFT], nbrs[RIGHT]);
+      // let's choose a random neighbour (direction) for the fish group to swim to
+      // we don't want to get same numbers across processes this time so we generate different seeds
+      srand(time(NULL) + rank);
+      int rand_neighbour = nbrs[rand() % 4];
+      // update fish ranks
+      if (fish_ranks[0] == rank)
+      {
+        // we don't want the fish groups stacking on each other
+        while (rand_neighbour == fish_ranks[1]) {
+          rand_neighbour = nbrs[rand() % 4];
+        }
+        fish_ranks[0] = rand_neighbour;
+      }
+      if (fish_ranks[1] == rank)
+      {
+        // we don't want the fish groups stacking on each other
+        while (rand_neighbour == fish_ranks[0]) {
+          rand_neighbour = nbrs[rand() % 4];
+        }
+        fish_ranks[1] = rand_neighbour;
+      }
+    }
 
-    // let's choose a random neighbour (direction) for the fish group to swim to
-    int rand_neighbour = nbrs[rand() % 4];
-    // swim!
+    // lets broadcast the new fish ranks to all processors!
+    MPI_Bcast(&fish_ranks[0], 1, MPI_INT, prev_fish_ranks[0], MPI_COMM_WORLD);
+    MPI_Bcast(&fish_ranks[1], 1, MPI_INT, prev_fish_ranks[1], MPI_COMM_WORLD);
+
+    // lets visualize the grid
+    visualizeGrid(&rank, &outbuf, prev_fish_ranks);
   }
-
-  // does this cell have a fish group?
-  // has_fish = (fish.x == coords[0]) && (fish.y == coords[1]);
-  // printf("has fish: %d \n", has_fish);
-
-  // printf("%d", fish->x);
-
-  // iteration(&cartcomm, &has_fish);
-
-  // for (i = 0; i < 4; i++)
-  // {
-  //   dest = nbrs[i];
-  //   source = nbrs[i];
-
-  //   // perform non-blocking communication
-  //   MPI_Isend(&outbuf, 1, MPI_INT, dest, tag, MPI_COMM_WORLD, &reqs[i]);
-  //   MPI_Irecv(&inbuf[i], 1, MPI_INT, source, tag, MPI_COMM_WORLD, &reqs[i + 4]); // 4 as a kind of offset
-  // }
-
-  // printf("Rank %d is sending it's type: %d, to it's neighbours: %d %d %d %d. \n",
-  //        rank, outbuf, nbrs[0], nbrs[1], nbrs[2], nbrs[3]);
-
-  // wait for non-blocking communication to be completed for output
-  // MPI_Waitall(8, reqs, stats);
-
-  // printf("Rank %d has received (u,d,l,r): %d %d %d %d \n", rank,
-  //        inbuf[UP], inbuf[DOWN], inbuf[LEFT], inbuf[RIGHT]);
-
-  visualizeGrid(rank, outbuf);
 
   MPI_Finalize();
 
