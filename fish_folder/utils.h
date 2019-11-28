@@ -20,7 +20,13 @@
 #include <unistd.h>
 #include <mpi.h>
 
-void generateType(int *rank, int *outbuf, int *harbor_coords);
-void visualizeGrid(int *rank, int *outbuf, int *fish_ranks);
+void generateType(int *rank, int *outbuf, int *harbor_rank, int *harbor_coords);
+void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks);
+void obj_print_coordinates(int *type, int *index, int *coords, int *fish_group_size);
+int max(int num1, int num2);
+int min(int num1, int num2);
+int coords_to_rank(int x, int y);
+int towards_harbor(int *nbrs, int *harbor_rank);
+int* rank_to_coords(int rank);
 
 #endif
