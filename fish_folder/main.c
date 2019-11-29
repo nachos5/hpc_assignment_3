@@ -168,8 +168,7 @@ int main(int argc, char **argv)
   int boat_ranks[2];
   int prev_boat_ranks[2];
 
-  int storm_ranks[16];
-  //int prev_storm_rank[2];
+  int storm_ranks[SIZE];
 
   int fish_group_size[2] = {10, 10};
   // 0 means no fish group, 1 means group 1 etc.
@@ -199,21 +198,37 @@ int main(int argc, char **argv)
   }
 
   int e_index;
-  int wavebuf[1] = {MPI_PROC_NULL};
 
   MPI_Comm cartcomm;
 
-  MPI_Request reqs[8];
-  MPI_Status stats[8];
+  MPI_Request reqs[32];
+  MPI_Status stats[32];
+  
+  
+  int nbrs[4];
+
+  int inbuffer[4][4] = {MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL};
+  int outbuffer[4][4] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 
   // starting with MPI program
   MPI_Init(&argc, &argv);
 
-  MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
-  MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cartcomm);
 
+  // EEEEE
+  MPI_Datatype cell;
+  // <Land/Sea, harbor, boat, fish, storm>
+  MPI_Type_vector(4, 1, 4, MPI_INT, &cell);
+  MPI_Type_commit(&cell);
+
+  MPI_Comm_size(MPI_COMM_WORLD, &numtasks);  
+  MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cartcomm);
   MPI_Comm_rank(cartcomm, &rank);
 
+
+  MPI_Cart_coords(cartcomm, rank, 2, coords);
+
+
+  /*
   // AAAAA //
   MPI_Comm row_comm;
 
@@ -229,7 +244,7 @@ int main(int argc, char **argv)
   MPI_Cart_coords(cartcomm, rank, 2, coords);
 
   // water or harbor
-  generateType(&rank, &outbuf, &harbor_rank, harbor_coords);
+  //generateType(&rank, &outbuf, &harbor_rank, harbor_coords);
 
   // printing harbor coords
   if (coords[0] == harbor_coords[0] && coords[1] == harbor_coords[1])
@@ -241,23 +256,49 @@ int main(int argc, char **argv)
   init_obj_ranks(&rank, boat_ranks, &harbor_rank);
 
   e_index = row_rank;
+  */
 
+
+  MPI_Cart_shift(cartcomm, 0, 1, &nbrs[UP], &nbrs[DOWN]);
+  MPI_Cart_shift(cartcomm, 1, 1, &nbrs[LEFT], &nbrs[RIGHT]);
+
+  //printf("Rank %d is sending to it's neighbours: %d %d %d %d. \n", rank, nbrs[0], nbrs[1], nbrs[2], nbrs[3]);
+
+
+  int k = 0;
+  for (i = 0; i < 4; i++)
+  {
+    dest = nbrs[i];
+    source = nbrs[i];
+
+    for (int j = 0; j < 4; j++)
+    {
+      // perform non-blocking communication
+      MPI_Isend(&outbuffer[i][j], 1, cell, dest, tag, MPI_COMM_WORLD, &reqs[k]);
+      MPI_Irecv(&inbuffer[i][j], 1, cell, source, tag, MPI_COMM_WORLD, &reqs[k + 16]);
+      k++;
+    }
+  }
+
+  MPI_Waitall(32, reqs, stats);
+
+  printf("Rank %d has received\n", rank);
+  printf("check = %d\n", inbuffer[0][0]);
+  for (int j = 0; j < 4; j++)
+  {
+    printf("(u,d,l,r): %d %d %d %d \n", inbuffer[UP][j], inbuffer[DOWN][j], inbuffer[LEFT][j], inbuffer[RIGHT][j]);
+  }
+
+  /*
   for (int it = 0; it < 10; it++)
   {
 
-    //MPI_Barrier(MPI_COMM_WORLD);
-    //printf("Thread %d, with row rank %d elevation %f, e_index = %d\n", rank, row_rank, elevation[e_index], e_index);
-
-
+    
     // lets visualize the grid
     visualizeGrid(&rank, &outbuf, fish_ranks, boat_ranks, storm_ranks);
 
 
-    /*
-    // wave iteration
-    iteration(&rank, &cartcomm, &harbor_rank, &outbuf, 3, coords, prev_storm_rank,
-              storm_rank, fish_group_size, boat_has_fish_group, &e_index, elevation);
-    */
+    int prev_e_index = e_index;
     if (e_index + 1 >= 16)
     {
       e_index = 0;
@@ -269,13 +310,23 @@ int main(int argc, char **argv)
     if (elevation[e_index] == 2.0)
     {
       storm_ranks[rank] = 1;
+      MPI_Bcast(&storm_ranks[rank], 1, MPI_INT, rank, MPI_COMM_WORLD);
     }
-    else
+    else if (elevation[prev_e_index] == 2.0)
     {
       storm_ranks[rank] = 0;
+      MPI_Bcast(&storm_ranks[rank], 1, MPI_INT, rank, MPI_COMM_WORLD);
     }
 
-    MPI_Bcast(storm_ranks[rank], 1, MPI_INT, rank, MPI_COMM_WORLD);
+    //MPI_Gather(&storm_ranks[rank], 1, MPI_INT, NULL, 0, MPI_INT, 0, MPI_COMM_WORLD);
+
+    //printf("rank %d\n", rank);
+    //MPI_Send(&storm_ranks[rank], 1, MPI_INT, 0, tag, MPI_COMM_WORLD);
+
+    //MPI_Recv(&storm_ranks[rank], 1, MPI_INT, a, tag, MPI_COMM_WORLD, stats)
+    
+    
+    //MPI_Bcast(&storm_ranks, 16, MPI_INT, 0, MPI_COMM_WORLD);
 
     // fish iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, 1, coords, prev_fish_ranks,
@@ -291,8 +342,9 @@ int main(int argc, char **argv)
     MPI_Bcast(boat_has_fish_group, 2, MPI_INT, 0, MPI_COMM_WORLD);
     // finally we check if a boat has fish and if it can drop it at the harbor this iteration
     //drop_fish(boat_has_fish_group);
+    
   }
-
+  */
   MPI_Finalize();
 
   return 0;
