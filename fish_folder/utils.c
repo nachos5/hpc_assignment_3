@@ -24,7 +24,7 @@ void generateType(int *rank, int *outbuf, int *harbor_rank, int *harbor_coords)
 
 // function to visualize the grid, the root process gathers the type of all cells (processes)
 // and then prints the content in the right order
-void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks)
+void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int *storm_ranks)
 {
   MPI_Barrier(MPI_COMM_WORLD);
   // only the root process gathers the data and prints it
@@ -63,6 +63,16 @@ void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks)
       {
         strengur[6] = 'b';
         strengur[7] = '2';
+      }
+
+      // Waves
+      for (int j = 0; j < 16; j++)
+      {
+        if (storm_ranks[i] == 1)
+        {
+          strengur[3] = 's';
+          strengur[4] = 's';
+        }
       }
 
       // print the type of this cell + if it has fish

@@ -31,7 +31,7 @@ void drop_fish(int *harbor_rank, int *nbrs, int *boat_has_fish_group, int index)
 // type 1 is fish, 2 is boat
 void iteration(int *rank, MPI_Comm *cartcomm, int *harbor_rank, int *outbuf, int type,
                int *coords, int *prev_obj_ranks, int *obj_ranks, int *fish_group_size,
-               int *boat_has_fish_group)
+               int *boat_has_fish_group, int *e_index, double *elevation)
 {
   prev_obj_ranks[0] = obj_ranks[0];
   prev_obj_ranks[1] = obj_ranks[1];
@@ -95,6 +95,26 @@ void iteration(int *rank, MPI_Comm *cartcomm, int *harbor_rank, int *outbuf, int
       obj_ranks[1] = choose_neighbour;
     }
   }
+  
+  /*
+  // Waves
+  if (type == 3)
+  {
+    if ((*e_index) + 1 >= 16)
+    {
+      (*e_index) = 0;
+    }
+    else {
+      (*e_index)++;
+    }
+
+    if (elevation[(*e_index)] == 2.0)
+    {
+      //obj_ranks[0] = *rank;
+
+    }
+  }
+  */
 
   // lets broadcast the new fish ranks to all processors (previous ranks broadcast the new ones)
   MPI_Bcast(&obj_ranks[0], 1, MPI_INT, prev_obj_ranks[0], MPI_COMM_WORLD);
@@ -137,6 +157,8 @@ int main(int argc, char **argv)
   int dims[2] = {ROWS, COLS}, periods[2] = {1, 1}, reorder = 1;
   int coords[2];
 
+  int row_tasks, row_rank;
+
   int harbor_coords[2];
   int harbor_rank;
 
@@ -146,9 +168,38 @@ int main(int argc, char **argv)
   int boat_ranks[2];
   int prev_boat_ranks[2];
 
+  int storm_ranks[16];
+  //int prev_storm_rank[2];
+
   int fish_group_size[2] = {10, 10};
   // 0 means no fish group, 1 means group 1 etc.
   int boat_has_fish_group[2] = {0, 0};
+
+  // ADDED Waves
+  int number_of_elevations = 16;
+  double e_step = 1.0/number_of_elevations;
+  double amplitude = 2.0;
+
+  int e = 0;
+  double elevation[number_of_elevations];
+
+  for(double x = 0.0; x < 1.0; x += e_step)
+  {
+    elevation[e] = amplitude * sin(x * 2*PI);
+
+    if (elevation[e] == 2.0)
+    {
+      storm_ranks[e] = 1;
+    }
+    else
+    {
+      storm_ranks[e] = 0;
+    }
+    e++;
+  }
+
+  int e_index;
+  int wavebuf[1] = {MPI_PROC_NULL};
 
   MPI_Comm cartcomm;
 
@@ -162,6 +213,17 @@ int main(int argc, char **argv)
   MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cartcomm);
 
   MPI_Comm_rank(cartcomm, &rank);
+
+  // AAAAA //
+  MPI_Comm row_comm;
+
+  int color = rank / 4;
+
+  MPI_Comm_split(MPI_COMM_WORLD, color, rank, &row_comm);
+
+
+  MPI_Comm_size(row_comm, &row_tasks);
+  MPI_Comm_rank(row_comm, &row_rank);
 
   // let's receive the coordinates of this cell
   MPI_Cart_coords(cartcomm, rank, 2, coords);
@@ -178,16 +240,49 @@ int main(int argc, char **argv)
   init_obj_ranks(&rank, fish_ranks, &harbor_rank);
   init_obj_ranks(&rank, boat_ranks, &harbor_rank);
 
+  e_index = row_rank;
+
   for (int it = 0; it < 10; it++)
   {
+
+    //MPI_Barrier(MPI_COMM_WORLD);
+    //printf("Thread %d, with row rank %d elevation %f, e_index = %d\n", rank, row_rank, elevation[e_index], e_index);
+
+
     // lets visualize the grid
-    visualizeGrid(&rank, &outbuf, fish_ranks, boat_ranks);
+    visualizeGrid(&rank, &outbuf, fish_ranks, boat_ranks, storm_ranks);
+
+
+    /*
+    // wave iteration
+    iteration(&rank, &cartcomm, &harbor_rank, &outbuf, 3, coords, prev_storm_rank,
+              storm_rank, fish_group_size, boat_has_fish_group, &e_index, elevation);
+    */
+    if (e_index + 1 >= 16)
+    {
+      e_index = 0;
+    }
+    else {
+      e_index++;
+    }
+
+    if (elevation[e_index] == 2.0)
+    {
+      storm_ranks[rank] = 1;
+    }
+    else
+    {
+      storm_ranks[rank] = 0;
+    }
+
+    MPI_Bcast(storm_ranks[rank], 1, MPI_INT, rank, MPI_COMM_WORLD);
+
     // fish iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, 1, coords, prev_fish_ranks,
-              fish_ranks, fish_group_size, boat_has_fish_group);
+              fish_ranks, fish_group_size, boat_has_fish_group, &e_index, elevation);
     // boat iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, 2, coords, prev_boat_ranks,
-              boat_ranks, fish_group_size, boat_has_fish_group);
+              boat_ranks, fish_group_size, boat_has_fish_group, &e_index, elevation);
     // process 0 checks if the boats caught some fish and then broadcasts to other processes
     if (rank == 0)
     {

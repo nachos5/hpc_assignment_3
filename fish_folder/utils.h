@@ -14,14 +14,17 @@
 #define ROWS 4
 #define COLS 4
 
+#define PI 3.14159265
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 #include <mpi.h>
+#include <math.h>
 
 void generateType(int *rank, int *outbuf, int *harbor_rank, int *harbor_coords);
-void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks);
+void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int *storm_ranks);
 void obj_print_coordinates(int *type, int *index, int *coords, int *fish_group_size);
 int max(int num1, int num2);
 int min(int num1, int num2);
