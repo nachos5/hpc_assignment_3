@@ -71,7 +71,9 @@ int main(int argc, char **argv)
     MPI_Bcast(boat_has_fish_group, 2, MPI_INT, 0, MPI_COMM_WORLD);
   }
 
-  printf("\n\nTOTAL FISH CAUGHT: %d", harbor_total_fish);
+  if (rank == 0) {
+    printf("\n\nTOTAL FISH CAUGHT: %d", harbor_total_fish);
+  }
 
   MPI_Finalize();
 

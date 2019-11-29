@@ -52,7 +52,7 @@ void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int
       }
       else if (fish_ranks[1] == recv_rank_buff[i])
       {
-        if (boat_has_fish_group[1] != 2 && boat_has_fish_group[1] != 2) {
+        if (boat_has_fish_group[0] != 2 && boat_has_fish_group[1] != 2) {
           strengur[3] = 'f';
           strengur[4] = '2';
         }
