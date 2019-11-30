@@ -13,6 +13,9 @@
 #define SIZE 16
 #define ROWS 4
 #define COLS 4
+#define FISH 1
+#define BOAT 2
+#define ITERATIONS 30
 
 #define PI 3.14159265
 
@@ -23,9 +26,9 @@
 #include <mpi.h>
 #include <math.h>
 
-void generateType(int *rank, int *outbuf, int *harbor_rank, int *harbor_coords);
-void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int *storm_ranks);
-void obj_print_coordinates(int *type, int *index, int *coords, int *fish_group_size);
+void generateTileType(int *rank, int *outbuf, int *harbor_rank, int *harbor_coords);
+void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int *boat_has_fish_group, int *storm_ranks);
+void obj_print_coordinates(int type, int *index, int *coords, int *fish_group_size);
 int max(int num1, int num2);
 int min(int num1, int num2);
 int coords_to_rank(int x, int y);
