@@ -2,41 +2,49 @@
 
 int main(int argc, char **argv)
 {
-    // variables common to all processes
-  int numtasks, rank, source, dest, outbuf, i, j, tag = 1;
-  int inbuf[4] = {MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL,
-                  MPI_PROC_NULL};
-  int dims[2] = {ROWS, COLS}, periods[2] = {1, 1}, reorder = 1;
-  int coords[2];
+  // Variables common to all processes
+  int numtasks, rank, outbuf, i, j;
 
+  // Cartetian variables
+  int dims[2] = {ROWS, COLS}, periods[2] = {1, 1}, reorder = 1;
+  int coords[2]; // Coords of each thread in the topology
+
+  // Harbor
   int harbor_coords[2];
   int harbor_rank;
+  int harbor_total_fish = 0;
 
+  // Fish
   int fish_ranks[2];
   int prev_fish_ranks[2];
 
+  int fish_group_size[2] = {10, 10};
+  int boat_has_fish_group[2] = {0, 0}; // 0 = no fish group, 1-n = fish group nr. 1-n
+
+  // Boat
   int boat_ranks[2];
   int prev_boat_ranks[2];
 
+  // Storm
   int storm_ranks[16];
 
-  int fish_group_size[2] = {10, 10};
-  // 0 means no fish group, 1 means group 1 etc.
-  int boat_has_fish_group[2] = {0, 0};
+  // Waves
 
-  // ADDED Waves
+  // Calculation variables
   int number_of_elevations = 16;
   double e_step = 1.0/number_of_elevations;
-  double amplitude = 2.0;
+  double amplitude = 2.0; // Height of wave (max height 2.0 = storm)
 
-  double elevation[number_of_elevations];
+  double elevation[number_of_elevations]; // Elevation of a single sine wave
 
+  // Calculate the elevation for a sine wave at each timesetp
   int e = 0;
   for(double x = 0.0; x < 1.0; x += e_step)
   {
     elevation[e] = amplitude * sin(x * 2*PI);
 
-    if (elevation[e] == 2.0)
+    // Elevation at peek = storm
+    if (elevation[e] == amplitude)
     {
       storm_ranks[e] = 1;
     }
@@ -47,44 +55,42 @@ int main(int argc, char **argv)
     e++;
   }
 
-  int e_index;
-  int harbor_total_fish = 0;
-
   MPI_Comm cartcomm;
 
-  MPI_Request reqs[8];
-  MPI_Status stats[8];
-
-  // starting with MPI program
+  // Starting with MPI program
   MPI_Init(&argc, &argv);
 
+  // Initialize the cartian communicator
   MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
   MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cartcomm);
-
   MPI_Comm_rank(cartcomm, &rank);
 
-  // let's receive the coordinates of this cell
+  // Let's receive the coordinates of this cell
   MPI_Cart_coords(cartcomm, rank, 2, coords);
 
-  // water or harbor
+  // Water or harbor cells
   generateTileType(&rank, &outbuf, &harbor_rank, harbor_coords);
 
-  // printing harbor coords
+  // Printing harbor coords
   if (coords[0] == harbor_coords[0] && coords[1] == harbor_coords[1])
   {
     printf("Harbor coordinates: %d,%d \n", harbor_coords[0], harbor_coords[1]);
   }
 
+  // Initialize boats and fish groups
   init_obj_ranks(&rank, fish_ranks, &harbor_rank);
   init_obj_ranks(&rank, boat_ranks, &harbor_rank);
 
-  e_index = rank;
+  // Initialize the wave (elevation level)
+  int e_index = rank; // Index of each threads elevation level
 
+  // Update loop for the simulation
   for (int it = 0; it < ITERATIONS; it++)
   {
-    // lets visualize the grid
+    // Visualize the grid
     visualizeGrid(&rank, &outbuf, fish_ranks, boat_ranks, boat_has_fish_group, storm_ranks);
 
+    // Each thread moves onto the next step in the elevation (following the sine wave and simulating an actual wave)
     if (e_index - 1 < 0)
     {
       e_index = 15;
@@ -93,6 +99,7 @@ int main(int argc, char **argv)
       e_index--;
     }
 
+    // Check if the new elevation reaches storm level
     if (elevation[e_index] == 2.0)
     {
       storm_ranks[rank] = 1;
@@ -102,19 +109,20 @@ int main(int argc, char **argv)
       storm_ranks[rank] = 0;
     }
 
+    // Each thread shares it's updated value of it's storm cell
     for (int i = 0; i < SIZE; i++)
     {
       MPI_Bcast(&storm_ranks[i], 1, MPI_INT, i, MPI_COMM_WORLD);
     }
 
-
-    // fish iteration
+    // Fish iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, FISH, coords, prev_fish_ranks,
               fish_ranks, fish_group_size, boat_has_fish_group, it);
-    // boat iteration
+    // Boat iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, BOAT, coords, prev_boat_ranks,
               boat_ranks, fish_group_size, boat_has_fish_group, it);
-    // process 0 checks if the boats caught some fish and then broadcasts to other processes
+    
+    // Thread 0 checks if the boats caught some fish and then broadcasts to other threads
     if (rank == 0)
     {
       collisions(fish_ranks, boat_ranks, boat_has_fish_group,
