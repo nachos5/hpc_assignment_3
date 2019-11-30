@@ -28,11 +28,12 @@
 
 void generateTileType(int *rank, int *outbuf, int *harbor_rank, int *harbor_coords);
 void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int *boat_has_fish_group, int *storm_ranks);
-void obj_print_coordinates(int type, int *index, int *coords, int *fish_group_size);
+void obj_print_coordinates(int type, int *index, int *coords, int *fish_group_size, MPI_File *fh);
 int max(int num1, int num2);
 int min(int num1, int num2);
 int coords_to_rank(int x, int y);
 int towards_harbor(int *nbrs, int *harbor_rank, int *storm_ranks);
 int* rank_to_coords(int rank);
+void mpi_print(MPI_File *fh, char *str, int length);
 
 #endif

@@ -5,10 +5,6 @@ int main(int argc, char **argv)
   // Variables common to all processes
   int numtasks, rank, outbuf, i, j;
 
-  // File
-  MPI_File fh;
-  int write_buf[10];
-
   // Cartetian variables
   int dims[2] = {ROWS, COLS}, periods[2] = {1, 1}, reorder = 1;
   int coords[2]; // Coords of each thread in the topology
@@ -74,7 +70,7 @@ int main(int argc, char **argv)
 
   // MPI I/O
   MPI_File fh;
-  MPI_File_open(MPI_COMM_WORLD, "test.out", MPI_MODE_CREATE | MPI_MODE_WRONLY,
+  MPI_File_open(MPI_COMM_WORLD, "mpi_io.out", MPI_MODE_CREATE | MPI_MODE_WRONLY,
                 MPI_INFO_NULL, &fh);
 
   // Water or harbor cells
@@ -84,8 +80,9 @@ int main(int argc, char **argv)
   if (coords[0] == harbor_coords[0] && coords[1] == harbor_coords[1])
   {
     char str[25];
-    sprintf(str, "Harbor coordinates: %d,%d \n", harbor_coords[0], harbor_coords[1]);
-    MPI_File_write(fh, str, 25, MPI_CHAR, MPI_STATUS_IGNORE);
+    sprintf(str, "Harbor coordinates: %d,%d \n\0", harbor_coords[0], harbor_coords[1]);
+    printf(str);
+    mpi_print(&fh, str, 25);
   }
 
   // Initialize boats and fish groups
@@ -94,9 +91,6 @@ int main(int argc, char **argv)
 
   // Initialize the wave (elevation level)
   int e_index = rank; // Index of each threads elevation level
-
-  // Initialize the file
-  MPI_File_open(MPI_COMM_WORLD, "file_out", MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
 
   // Update loop for the simulation
   for (int it = 0; it < ITERATIONS; it++)
@@ -132,10 +126,10 @@ int main(int argc, char **argv)
 
     // Fish iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, FISH, coords, prev_fish_ranks,
-              fish_ranks, fish_group_size, boat_has_fish_group, storm_ranks, it);
+              fish_ranks, fish_group_size, boat_has_fish_group, storm_ranks, it, &fh);
     // Boat iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, BOAT, coords, prev_boat_ranks,
-              boat_ranks, fish_group_size, boat_has_fish_group, storm_ranks, it);
+              boat_ranks, fish_group_size, boat_has_fish_group, storm_ranks, it, &fh);
 
     // Thread 0 checks if the boats caught some fish and then broadcasts to other threads
     if (rank == 0)
@@ -144,11 +138,6 @@ int main(int argc, char **argv)
                  &harbor_rank, fish_group_size, &harbor_total_fish);
     }
     MPI_Bcast(boat_has_fish_group, 2, MPI_INT, 0, MPI_COMM_WORLD);
-
-    // Write to file
-    if (rank == 0)
-      write_buf[0] = rank;
-      MPI_File_write(fh, write_buf, 1, MPI_INT, MPI_STATUS_IGNORE);
   }
 
   if (rank == 0)
@@ -211,7 +200,7 @@ void updateObjRank(int type, int *index, int *harbor_rank, int *nbrs,
 
 void iteration(int *rank, MPI_Comm *cartcomm, int *harbor_rank, int *outbuf, int type,
                int *coords, int *prev_obj_ranks, int *obj_ranks, int *fish_group_size,
-               int *boat_has_fish_group, int *storm_ranks, int iteration_index)
+               int *boat_has_fish_group, int *storm_ranks, int iteration_index, MPI_File *fh)
 {
   int index;
   prev_obj_ranks[0] = obj_ranks[0];
@@ -241,7 +230,7 @@ void iteration(int *rank, MPI_Comm *cartcomm, int *harbor_rank, int *outbuf, int
     // print position
     if (!(type == FISH && boat_has_fish_group[index] > 0))
     {
-      obj_print_coordinates(type, &index, coords, fish_group_size);
+      obj_print_coordinates(type, &index, coords, fish_group_size, fh);
     }
   }
 

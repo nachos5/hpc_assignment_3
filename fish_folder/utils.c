@@ -45,14 +45,16 @@ void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int
       // fish
       if (fish_ranks[0] == recv_rank_buff[i])
       {
-        if (boat_has_fish_group[0] != 1 && boat_has_fish_group[1] != 1) {
+        if (boat_has_fish_group[0] != 1 && boat_has_fish_group[1] != 1)
+        {
           strengur[3] = 'f';
           strengur[4] = '1';
         }
       }
       else if (fish_ranks[1] == recv_rank_buff[i])
       {
-        if (boat_has_fish_group[0] != 2 && boat_has_fish_group[1] != 2) {
+        if (boat_has_fish_group[0] != 2 && boat_has_fish_group[1] != 2)
+        {
           strengur[3] = 'f';
           strengur[4] = '2';
         }
@@ -97,7 +99,7 @@ void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int
   MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void obj_print_coordinates(int type, int *index, int *coords, int *fish_group_size)
+void obj_print_coordinates(int type, int *index, int *coords, int *fish_group_size, MPI_File *fh)
 {
   if (type == FISH)
   {
@@ -155,11 +157,12 @@ int towards_harbor(int *nbrs, int *harbor_rank, int *storm_ranks)
   harbor_coords_other_way[1] = harbor_coords_other_way[1] + COLS;
   // printf("harbor %d, %d, %d, %d \n", harbor_coords[0], harbor_coords[1],
   //        harbor_coords_other_way[0], harbor_coords_other_way[1]);
-  
+
   for (int i = 0; i < 4; i++)
   {
     // if there is a storm on this neighbour cell we avoid it
-    if (storm_ranks[nbrs[i]] == 1) {
+    if (storm_ranks[nbrs[i]] == 1)
+    {
       continue;
     }
     int dist;
@@ -176,4 +179,9 @@ int towards_harbor(int *nbrs, int *harbor_rank, int *storm_ranks)
   // we return the index neighbour
   // printf("min index: %d %d\n", min_index, nbrs[min_index]);
   return min_index;
+}
+
+void mpi_print(MPI_File *fh, char *str, int length)
+{
+  MPI_File_write(*fh, str, length, MPI_CHAR, MPI_STATUS_IGNORE);
 }
