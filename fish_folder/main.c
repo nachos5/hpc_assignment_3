@@ -6,8 +6,8 @@ int main(int argc, char **argv)
   int numtasks, rank, outbuf, i, j;
 
   // File
-  MPI_File fh;
-  int write_buf[10];
+  //MPI_File fh;
+  //int write_buf[10];
 
   // Cartetian variables
   int dims[2] = {ROWS, COLS}, periods[2] = {1, 1}, reorder = 1;
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
   int e_index = rank; // Index of each threads elevation level
 
   // Initialize the file
-  MPI_File_open(MPI_COMM_WORLD, "file_out", MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
+  //MPI_File_open(MPI_COMM_WORLD, "file_out", MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
 
   // Update loop for the simulation
   for (int it = 0; it < ITERATIONS; it++)
@@ -146,9 +146,9 @@ int main(int argc, char **argv)
     MPI_Bcast(boat_has_fish_group, 2, MPI_INT, 0, MPI_COMM_WORLD);
 
     // Write to file
-    if (rank == 0)
-      write_buf[0] = rank;
-      MPI_File_write(fh, write_buf, 1, MPI_INT, MPI_STATUS_IGNORE);
+    //if (rank == 0)
+    //  write_buf[0] = rank;
+    //  MPI_File_write(fh, write_buf, 1, MPI_INT, MPI_STATUS_IGNORE);
   }
 
   if (rank == 0)
