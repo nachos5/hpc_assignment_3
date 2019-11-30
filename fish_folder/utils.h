@@ -32,7 +32,7 @@ void obj_print_coordinates(int type, int *index, int *coords, int *fish_group_si
 int max(int num1, int num2);
 int min(int num1, int num2);
 int coords_to_rank(int x, int y);
-int towards_harbor(int *nbrs, int *harbor_rank);
+int towards_harbor(int *nbrs, int *harbor_rank, int *storm_ranks);
 int* rank_to_coords(int rank);
 
 #endif
