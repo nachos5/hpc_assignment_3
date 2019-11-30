@@ -26,12 +26,12 @@ int main(int argc, char **argv)
   int prev_boat_ranks[2];
 
   // Storm
-  int storm_ranks[16];
+  int storm_ranks[SIZE];
 
   // Waves
 
   // Calculation variables
-  int number_of_elevations = 16;
+  int number_of_elevations = SIZE;
   double e_step = 1.0 / number_of_elevations;
   double amplitude = 2.0; // Height of wave (max height 2.0 = storm)
 
@@ -100,7 +100,7 @@ int main(int argc, char **argv)
     // Each thread moves onto the next step in the elevation (following the sine wave and simulating an actual wave)
     if (e_index - 1 < 0)
     {
-      e_index = 15;
+      e_index = SIZE-1;
     }
     else
     {

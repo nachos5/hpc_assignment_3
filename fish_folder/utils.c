@@ -70,7 +70,7 @@ void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int
       }
 
       // Waves
-      for (int j = 0; j < 16; j++)
+      for (int j = 0; j < SIZE; j++)
       {
         if (storm_ranks[i] == 1)
         {
