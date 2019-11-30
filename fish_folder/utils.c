@@ -24,7 +24,7 @@ void generateTileType(int *rank, int *outbuf, int *harbor_rank, int *harbor_coor
 
 // function to visualize the grid, the root process gathers the type of all cells (processes)
 // and then prints the content in the right order
-void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int *storm_ranks)
+void visualizeGrid(int *rank, int *outbuf, int *fish_ranks, int *boat_ranks, int *boat_has_fish_group, int *storm_ranks)
 {
   MPI_Barrier(MPI_COMM_WORLD);
   // only the root process gathers the data and prints it

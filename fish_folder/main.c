@@ -48,6 +48,7 @@ int main(int argc, char **argv)
   }
 
   int e_index;
+  int harbor_total_fish = 0;
 
   MPI_Comm cartcomm;
 
