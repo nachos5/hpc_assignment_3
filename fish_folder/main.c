@@ -32,16 +32,16 @@ int main(int argc, char **argv)
 
   // Calculation variables
   int number_of_elevations = 16;
-  double e_step = 1.0/number_of_elevations;
+  double e_step = 1.0 / number_of_elevations;
   double amplitude = 2.0; // Height of wave (max height 2.0 = storm)
 
   double elevation[number_of_elevations]; // Elevation of a single sine wave
 
   // Calculate the elevation for a sine wave at each timesetp
   int e = 0;
-  for(double x = 0.0; x < 1.0; x += e_step)
+  for (double x = 0.0; x < 1.0; x += e_step)
   {
-    elevation[e] = amplitude * sin(x * 2*PI);
+    elevation[e] = amplitude * sin(x * 2 * PI);
 
     // Elevation at peek = storm
     if (elevation[e] == amplitude)
@@ -68,13 +68,20 @@ int main(int argc, char **argv)
   // Let's receive the coordinates of this cell
   MPI_Cart_coords(cartcomm, rank, 2, coords);
 
+  // MPI I/O
+  MPI_File fh;
+  MPI_File_open(MPI_COMM_WORLD, "test.out", MPI_MODE_CREATE | MPI_MODE_WRONLY,
+                MPI_INFO_NULL, &fh);
+
   // Water or harbor cells
   generateTileType(&rank, &outbuf, &harbor_rank, harbor_coords);
 
   // Printing harbor coords
   if (coords[0] == harbor_coords[0] && coords[1] == harbor_coords[1])
   {
-    printf("Harbor coordinates: %d,%d \n", harbor_coords[0], harbor_coords[1]);
+    char str[25];
+    sprintf(str, "Harbor coordinates: %d,%d \n", harbor_coords[0], harbor_coords[1]);
+    MPI_File_write(fh, str, 25, MPI_CHAR, MPI_STATUS_IGNORE);
   }
 
   // Initialize boats and fish groups
@@ -95,7 +102,8 @@ int main(int argc, char **argv)
     {
       e_index = 15;
     }
-    else {
+    else
+    {
       e_index--;
     }
 
@@ -117,11 +125,11 @@ int main(int argc, char **argv)
 
     // Fish iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, FISH, coords, prev_fish_ranks,
-              fish_ranks, fish_group_size, boat_has_fish_group, it);
+              fish_ranks, fish_group_size, boat_has_fish_group, storm_ranks, it);
     // Boat iteration
     iteration(&rank, &cartcomm, &harbor_rank, &outbuf, BOAT, coords, prev_boat_ranks,
-              boat_ranks, fish_group_size, boat_has_fish_group, it);
-    
+              boat_ranks, fish_group_size, boat_has_fish_group, storm_ranks, it);
+
     // Thread 0 checks if the boats caught some fish and then broadcasts to other threads
     if (rank == 0)
     {
@@ -131,7 +139,8 @@ int main(int argc, char **argv)
     MPI_Bcast(boat_has_fish_group, 2, MPI_INT, 0, MPI_COMM_WORLD);
   }
 
-  if (rank == 0) {
+  if (rank == 0)
+  {
     printf("\n\nTOTAL FISH CAUGHT: %d", harbor_total_fish);
   }
 
@@ -158,12 +167,12 @@ void init_obj_ranks(int *rank, int *obj_ranks, int *harbor_rank)
 }
 
 void updateObjRank(int type, int *index, int *harbor_rank, int *nbrs,
-                   int *obj_ranks, int *choose_neighbour, int *boat_has_fish_group)
+                   int *obj_ranks, int *choose_neighbour, int *boat_has_fish_group, int *storm_ranks)
 {
   // if this is a boat and has fish it goes towards the harbor
   if (type == BOAT && boat_has_fish_group[*index] > 0)
   {
-    *choose_neighbour = nbrs[towards_harbor(nbrs, harbor_rank)];
+    *choose_neighbour = nbrs[towards_harbor(nbrs, harbor_rank, storm_ranks)];
   }
   else
   {
@@ -176,8 +185,8 @@ void updateObjRank(int type, int *index, int *harbor_rank, int *nbrs,
     {
       other_index = 0;
     }
-    // we don't want the object groups stacking on each other (+ not on harbor)
-    while (*choose_neighbour == obj_ranks[other_index] || *choose_neighbour == *harbor_rank)
+    // we don't want the object groups stacking on each other (+ not on harbor, + not on a storm cell)
+    while (*choose_neighbour == obj_ranks[other_index] || *choose_neighbour == *harbor_rank || storm_ranks[*choose_neighbour] == 1)
     {
       *choose_neighbour = nbrs[rand() % 4];
     }
@@ -187,7 +196,7 @@ void updateObjRank(int type, int *index, int *harbor_rank, int *nbrs,
 
 void iteration(int *rank, MPI_Comm *cartcomm, int *harbor_rank, int *outbuf, int type,
                int *coords, int *prev_obj_ranks, int *obj_ranks, int *fish_group_size,
-               int *boat_has_fish_group, int iteration_index)
+               int *boat_has_fish_group, int *storm_ranks, int iteration_index)
 {
   int index;
   prev_obj_ranks[0] = obj_ranks[0];
@@ -213,9 +222,10 @@ void iteration(int *rank, MPI_Comm *cartcomm, int *harbor_rank, int *outbuf, int
     srand(time(NULL) + *rank + iteration_index);
     int choose_neighbour = nbrs[rand() % 4];
     // update object rank
-    updateObjRank(type, &index, harbor_rank, nbrs, obj_ranks, &choose_neighbour, boat_has_fish_group);
+    updateObjRank(type, &index, harbor_rank, nbrs, obj_ranks, &choose_neighbour, boat_has_fish_group, storm_ranks);
     // print position
-    if (!(type == FISH && boat_has_fish_group[index] > 0)) {
+    if (!(type == FISH && boat_has_fish_group[index] > 0))
+    {
       obj_print_coordinates(type, &index, coords, fish_group_size);
     }
   }
@@ -253,11 +263,14 @@ void collisions(int *fish_ranks, int *boat_ranks, int *boat_has_fish_group,
   // then we check whether the boats have fish and are at the harbor
   if (boat_has_fish_group[0] > 0 && boat_ranks[0] == *harbor_rank)
   {
-    if (boat_has_fish_group[0] == 1) {
+    if (boat_has_fish_group[0] == 1)
+    {
       printf("\n\nBoat 1 drops %d fishes at the harbor!\n\n", fish_group_size[0]);
       printf("Fish group 1 spawns again in the ocean!\n");
       *harbor_total_fish += fish_group_size[0];
-    } else {
+    }
+    else
+    {
       printf("\n\nBoat 1 drops %d fishes at the harbor!\n\n", fish_group_size[1]);
       printf("Fish group 2 spawns again in the ocean!\n");
       *harbor_total_fish += fish_group_size[1];
@@ -266,11 +279,14 @@ void collisions(int *fish_ranks, int *boat_ranks, int *boat_has_fish_group,
   }
   if (boat_has_fish_group[1] > 0 && boat_ranks[1] == *harbor_rank)
   {
-    if (boat_has_fish_group[1] == 1) {
+    if (boat_has_fish_group[1] == 1)
+    {
       printf("\n\nBoat 2 drops %d fishes at the harbor!\n\n", fish_group_size[0]);
       printf("Fish group 1 spawns again in the ocean!\n");
       *harbor_total_fish += fish_group_size[0];
-    } else {
+    }
+    else
+    {
       printf("\n\nBoat 2 drops %d fishes at the harbor!\n\n", fish_group_size[1]);
       printf("Fish group 2 spawns again in the ocean!\n");
       *harbor_total_fish += fish_group_size[1];

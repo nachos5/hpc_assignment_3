@@ -145,7 +145,7 @@ int manhattan_distance(int *p1, int *p2)
   return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1]);
 }
 
-int towards_harbor(int *nbrs, int *harbor_rank)
+int towards_harbor(int *nbrs, int *harbor_rank, int *storm_ranks)
 {
   int min_dist = 1000;
   int min_index = 1000;
@@ -158,6 +158,10 @@ int towards_harbor(int *nbrs, int *harbor_rank)
   
   for (int i = 0; i < 4; i++)
   {
+    // if there is a storm on this neighbour cell we avoid it
+    if (storm_ranks[nbrs[i]] == 1) {
+      continue;
+    }
     int dist;
     int *curr_coords = rank_to_coords(nbrs[i]);
     // printf("curr coords %d, %d \n", curr_coords[0], curr_coords[1]);
